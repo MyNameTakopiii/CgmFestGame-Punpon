@@ -9,7 +9,7 @@ export interface UseWebcamReturn {
   startCamera: () => Promise<void>;
   stopCamera: () => void;
   switchCamera: () => Promise<void>;
-  captureSnapshot: () => string | null;
+  captureSnapshot: (maxWidth?: number, quality?: number) => string | null;
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => Promise<string[]>;
 }
 
@@ -124,7 +124,72 @@ export function useWebcam(): UseWebcamReturn {
 
   const switchCamera = useCallback(async () => {
     const nextMode = facingMode === 'user' ? 'environment' : 'user';
+    setError(null);
+
+    // Stop current stream tracks cleanly before requesting the other camera
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => {
+        try {
+          t.stop();
+        } catch {
+          // ignore
+        }
+      });
+      streamRef.current = null;
+    }
+
     setFacingMode(nextMode);
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      return;
+    }
+
+    let mediaStream: MediaStream | null = null;
+    try {
+      // 1. Try exact facingMode constraint (required for many Android/iOS devices to switch)
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { exact: nextMode },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+    } catch {
+      try {
+        // 2. Fallback to ideal facingMode
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: nextMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (err) {
+        console.warn('Switch camera constraint fallback, trying any video stream...', err);
+        try {
+          // 3. Fallback to basic video stream
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        } catch (finalErr) {
+          console.error('Failed to switch camera completely:', finalErr);
+          setError('ไม่สามารถสลับกล้องได้');
+          return;
+        }
+      }
+    }
+
+    streamRef.current = mediaStream;
+    setStream(mediaStream);
+    setIsActive(true);
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = mediaStream;
+      videoRef.current.play().catch(() => {});
+    }
   }, [facingMode]);
 
   // Keep video element in sync whenever stream updates
@@ -141,29 +206,39 @@ export function useWebcam(): UseWebcamReturn {
     };
   }, [stopCamera]);
 
-  const captureSnapshot = useCallback((): string | null => {
-    if (!videoRef.current) return null;
-    const video = videoRef.current;
-    const width = video.videoWidth || 1280;
-    const height = video.videoHeight || 720;
+  const captureSnapshot = useCallback(
+    (maxWidth?: number, quality?: number): string | null => {
+      if (!videoRef.current) return null;
+      const video = videoRef.current;
+      const rawWidth = video.videoWidth || 1280;
+      const rawHeight = video.videoHeight || 720;
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+      let targetWidth = rawWidth;
+      let targetHeight = rawHeight;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
+      if (maxWidth && targetWidth > maxWidth) {
+        targetHeight = Math.round((rawHeight * maxWidth) / rawWidth);
+        targetWidth = maxWidth;
+      }
 
-    // Flip horizontally if front camera for natural mirror reflection
-    if (facingMode === 'user') {
-      ctx.translate(width, 0);
-      ctx.scale(-1, 1);
-    }
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
 
-    // Capture full video frame at full size and full aspect ratio (no square crop)
-    ctx.drawImage(video, 0, 0, width, height);
-    return canvas.toDataURL('image/jpeg', 0.95);
-  }, [facingMode]);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+
+      // Flip horizontally if front camera for natural mirror reflection
+      if (facingMode === 'user') {
+        ctx.translate(targetWidth, 0);
+        ctx.scale(-1, 1);
+      }
+
+      ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
+      return canvas.toDataURL('image/jpeg', quality ?? 0.82);
+    },
+    [facingMode]
+  );
 
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>): Promise<string[]> => {

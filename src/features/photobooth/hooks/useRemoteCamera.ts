@@ -13,6 +13,7 @@ export interface UseRemoteCameraHostReturn {
   pairingUrl: string;
   isConnected: boolean;
   receivedShots: string[];
+  latestReceivedIndex: number | null;
   lastError: string | null;
   resetConnection: () => void;
 }
@@ -26,33 +27,49 @@ export function useRemoteCameraHost(
   const [roomId] = useState(() => Math.random().toString(36).substring(2, 8));
   const [isConnected, setIsConnected] = useState(false);
   const [receivedShots, setReceivedShots] = useState<string[]>([]);
+  const [latestReceivedIndex, setLatestReceivedIndex] = useState<number | null>(null);
   const [lastError, setLastError] = useState<string | null>(null);
 
   const peerRef = useRef<Peer | null>(null);
   const connRef = useRef<DataConnection | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
+  // Keep callback in ref so changes don't re-trigger peer destruction
+  const onAllShotsReceivedRef = useRef(onAllShotsReceived);
+  useEffect(() => {
+    onAllShotsReceivedRef.current = onAllShotsReceived;
+  }, [onAllShotsReceived]);
+
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const pairingUrl = `${origin}/?mode=camera&room=${roomId}`;
 
-  const handleIncomingMessage = useCallback(
-    (msg: RemoteMessage) => {
-      if (msg.type === 'CONNECT' || msg.type === 'READY') {
-        setIsConnected(true);
-      } else if (msg.type === 'SNAP' && msg.image !== undefined && msg.slot !== undefined) {
-        setIsConnected(true);
-        setReceivedShots((prev) => {
-          const next = [...prev];
-          next[msg.slot!] = msg.image!;
-          return next;
-        });
-      } else if (msg.type === 'COMPLETE' && msg.shots && msg.shots.length >= 3) {
-        setReceivedShots(msg.shots);
-        onAllShotsReceived?.(msg.shots);
-      }
-    },
-    [onAllShotsReceived]
-  );
+  const handleIncomingMessage = useCallback((msg: RemoteMessage) => {
+    if (msg.type === 'CONNECT' || msg.type === 'READY') {
+      setIsConnected(true);
+    } else if (msg.type === 'SNAP' && msg.image !== undefined && msg.slot !== undefined) {
+      setIsConnected(true);
+      setLatestReceivedIndex(msg.slot);
+      setReceivedShots((prev) => {
+        const next = [...prev];
+        next[msg.slot!] = msg.image!;
+        // If all 3 slots are filled, trigger completion automatically
+        if (next[0] && next[1] && next[2]) {
+          setTimeout(() => {
+            onAllShotsReceivedRef.current?.([next[0], next[1], next[2]]);
+          }, 350);
+        }
+        return next;
+      });
+    } else if (msg.type === 'COMPLETE') {
+      setReceivedShots((prev) => {
+        const finalShots = msg.shots && msg.shots.length >= 3 ? msg.shots : prev;
+        if (finalShots[0] && finalShots[1] && finalShots[2]) {
+          onAllShotsReceivedRef.current?.([finalShots[0], finalShots[1], finalShots[2]]);
+        }
+        return finalShots;
+      });
+    }
+  }, []);
 
   useEffect(() => {
     // 1. BroadcastChannel for local/multi-tab instantaneous sync
@@ -88,11 +105,15 @@ export function useRemoteCameraHost(
         conn.on('close', () => {
           setIsConnected(false);
         });
+
+        conn.on('error', (err) => {
+          console.warn('Host connection notice:', err);
+        });
       });
 
       peer.on('error', (err) => {
         console.warn('Host PeerJS notice:', err);
-        // Do not crash, BroadcastChannel still works locally
+        setLastError(err.message || 'PeerJS notice');
       });
     } catch (err) {
       console.warn('PeerJS init failed:', err);
@@ -104,17 +125,19 @@ export function useRemoteCameraHost(
     };
   }, [roomId, handleIncomingMessage]);
 
-  const resetConnection = () => {
+  const resetConnection = useCallback(() => {
     setReceivedShots([]);
+    setLatestReceivedIndex(null);
     setIsConnected(false);
     setLastError(null);
-  };
+  }, []);
 
   return {
     roomId,
     pairingUrl,
     isConnected,
     receivedShots,
+    latestReceivedIndex,
     lastError,
     resetConnection,
   };
@@ -123,7 +146,7 @@ export function useRemoteCameraHost(
 export interface UseRemoteCameraClientReturn {
   isConnected: boolean;
   sendSnap: (slot: number, imageDataUrl: string) => void;
-  sendComplete: (allShots: string[]) => void;
+  sendComplete: (allShots?: string[]) => void;
 }
 
 /**
@@ -167,6 +190,10 @@ export function useRemoteCameraClient(roomId: string): UseRemoteCameraClientRetu
         conn.on('close', () => {
           setIsConnected(false);
         });
+
+        conn.on('error', (err) => {
+          console.warn('Client connection error:', err);
+        });
       });
 
       clientPeer.on('error', (err) => {
@@ -182,21 +209,29 @@ export function useRemoteCameraClient(roomId: string): UseRemoteCameraClientRetu
     };
   }, [roomId]);
 
-  const sendSnap = (slot: number, imageDataUrl: string) => {
+  const sendSnap = useCallback((slot: number, imageDataUrl: string) => {
     const msg: RemoteMessage = { type: 'SNAP', slot, image: imageDataUrl };
     channelRef.current?.postMessage(msg);
     if (connRef.current && connRef.current.open) {
-      connRef.current.send(msg);
+      try {
+        connRef.current.send(msg);
+      } catch (err) {
+        console.warn('sendSnap WebRTC error:', err);
+      }
     }
-  };
+  }, []);
 
-  const sendComplete = (allShots: string[]) => {
+  const sendComplete = useCallback((allShots?: string[]) => {
     const msg: RemoteMessage = { type: 'COMPLETE', shots: allShots };
     channelRef.current?.postMessage(msg);
     if (connRef.current && connRef.current.open) {
-      connRef.current.send(msg);
+      try {
+        connRef.current.send(msg);
+      } catch (err) {
+        console.warn('sendComplete WebRTC error:', err);
+      }
     }
-  };
+  }, []);
 
   return {
     isConnected,

@@ -249,3 +249,79 @@ src/
 - Real-time multiplayer / online leaderboards (would require backend — breaks "zero backend" constraint)
 - Licensed audio playback (legal/licensing complexity — TTS-only avoids this)
 - Native mobile app packaging
+
+---
+
+## 6. After Party Photobooth & Mobile Remote Camera Specification
+
+> **Feature Type:** Fan-Made 3-Cut Keepsake Photobooth (ตู้สติกเกอร์ 3 ช่องที่ระลึก)  
+> **Status:** Production Ready (v1.1)
+
+### 6.1 Feature Overview
+
+The **After Party Photobooth** is an interactive souvenir feature embedded into the CGM48 Lyric Guess arcade experience. Inspired by traditional Japanese Purikura and Korean 3-Cut / 4-Cut photo strips, it allows fans to capture a 3-shot sequence, customize it with official CGM48 & Punpon After Party themes, and instantly save or share the keepsake.
+
+### 6.2 3-Cut Sticker Strip Themes
+
+| Theme ID | Name | Frame Art & Style | Dynamic Text Support |
+| :--- | :--- | :--- | :--- |
+| `punpon_sticker` | **Punpon Sticker (Mint Green)** | Solid CGM48 Mint `#49c5a8`, white photo borders, soft drop shadows, official Punpon logo & hashtag | ✅ Dynamic top header text (up to 32px equivalent) |
+| `ge_sticker` | **General Election Special** | Official 35mm filmstrip artwork from CGM48 General Election | ❌ Fixed official artwork |
+| `afterschool` | **After School Class** | Pastel classroom & after-school souvenir frame | ❌ Fixed official artwork |
+
+### 6.3 Dual-Capture Architecture: PC Webcam vs Mobile Companion
+
+Users can capture their 3 shots through two distinct modes:
+
+```
+                  ┌──────────────────────────────────────────────┐
+                  │           Computer Display (Host)            │
+                  │   PolaroidModal / SequenceViewfinder / Strip  │
+                  └───────────────▲──────────────▲───────────────┘
+                                  │              │
+                   (WebRTC PeerJS)│              │(Direct getUserMedia)
+                                  │              │
+                  ┌───────────────┴──┐       ┌───┴──────────────┐
+                  │ Mobile Companion │       │    PC Webcam     │
+                  │  (4G/5G or WiFi) │       │  (Built-in / USB)│
+                  └──────────────────┘       └──────────────────┘
+```
+
+1. **Computer Webcam Mode (`SequenceViewfinder`):** Direct in-browser camera feed with 3s countdown and 2s pose-change intervals between shots.
+2. **Mobile Companion Mode (`MobileCameraView`):**
+   - Host generates a unique room ID and renders a QR code.
+   - User scans the QR code with their mobile phone (works over 4G/5G cellular data or Wi-Fi without needing same-network LAN).
+   - Instant P2P communication is established via **WebRTC DataChannel (`peerjs`)** alongside a fallback **`BroadcastChannel`** for same-browser testing.
+
+### 6.4 Front & Rear Camera Switching (`switchCamera`)
+
+- Mobile camera view provides a one-tap camera toggle button (`RotateCcw`) with clear status badge ("กล้องหน้า" vs "กล้องหลัง").
+- When toggling:
+  1. Active MediaStream tracks are explicitly terminated (`track.stop()`) to release the hardware sensor.
+  2. A new `getUserMedia` request is executed with `{ facingMode: { exact: nextMode } }`, falling back to `{ facingMode: nextMode }`.
+  3. Video preview and snapshot canvas dynamically toggle mirror transformations:
+     - **Front Camera (`user`):** Horizontal flip (`scale-x-[-1]`, canvas `scale(-1, 1)`) for intuitive mirror reflection.
+     - **Rear Camera (`environment`):** Natural unmirrored perspective (`scale-x-100`, direct canvas draw).
+
+### 6.5 WebRTC DataChannel Payload Optimization
+
+To ensure instantaneous transmission across cellular networks and eliminate packet drops caused by SCTP DataChannel limits (64KB–256KB):
+- Captured video frames are scaled down to a maximum width of **960px** at **JPEG quality 0.78**.
+- The resulting payload size is reduced to **~35KB–45KB**, allowing immediate transmission within a single network packet.
+- Completion signaling (`COMPLETE`) is sent as a lightweight command message, allowing the Host to assemble the final strip from the accumulated slots without redundant multi-megabyte payload bursts.
+
+### 6.6 Real-Time PC Live Preview & Auto-Transition
+
+1. **Real-Time Live Preview on Host:**
+   - As each shot is captured on mobile, the Host receives the snap within milliseconds.
+   - Host UI immediately showcases an animated, prominent **Live Preview Card** of the latest shot with a celebratory badge (`ช็อตที่ N ได้รับแล้ว! 🎉`).
+   - The 3-slot filmstrip tracker displays thumbnail previews and green checkmarks.
+2. **Auto-Transition:**
+   - Upon receiving the 3rd shot or `COMPLETE` signal, the Host automatically transitions from the viewfinder to the **Strip Assembly (`generating`)** phase.
+   - Within 500ms, the composite canvas generates the final 3-cut strip and presents the **PhotoStripCard** containing download controls and mobile download QR codes.
+
+### 6.7 Storage & Cross-Device Download System
+
+- **Cloudinary Direct Upload (Optional):** If `VITE_CLOUDINARY_CLOUD_NAME` and `VITE_CLOUDINARY_UPLOAD_PRESET` are configured in `.env`, the composite photo strip is uploaded directly from the client to Cloudinary via unsigned REST API. A short public CDN URL is encoded into a download QR code.
+- **Local In-Memory Fallback:** If Cloudinary credentials are not configured, the app seamlessly falls back to storing the data URL in local memory (`uploadService.ts`), providing an in-app download view without crashing.
+

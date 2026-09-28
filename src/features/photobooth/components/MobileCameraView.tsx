@@ -58,8 +58,7 @@ export const MobileCameraView: React.FC<MobileCameraViewProps> = ({ roomId }) =>
                   (snap3) => {
                     sendSnap(2, snap3);
                     setIsAutoSequencing(false);
-                    const all = [snap1, snap2, snap3];
-                    sendComplete(all);
+                    sendComplete([snap1, snap2, snap3]);
                     setIsDone(true);
                   },
                   [snap1, snap2]
@@ -90,7 +89,8 @@ export const MobileCameraView: React.FC<MobileCameraViewProps> = ({ roomId }) =>
         // Snap
         setIsFlashing(true);
         setTimeout(() => setIsFlashing(false), 200);
-        const snap = captureSnapshot() || DEFAULT_SAMPLE_SHOTS[existingShots.length % 3];
+        const snap =
+          captureSnapshot(960, 0.78) || DEFAULT_SAMPLE_SHOTS[existingShots.length % 3];
         const updated = [...existingShots, snap];
         setShots(updated);
         onFinish(snap);
@@ -119,7 +119,7 @@ export const MobileCameraView: React.FC<MobileCameraViewProps> = ({ roomId }) =>
   // Manual single snap
   const handleSingleSnap = () => {
     setIsFlashing(true);
-    const snap = captureSnapshot() || DEFAULT_SAMPLE_SHOTS[activeSlot % 3];
+    const snap = captureSnapshot(960, 0.78) || DEFAULT_SAMPLE_SHOTS[activeSlot % 3];
     setTimeout(() => setIsFlashing(false), 200);
 
     const updated = [...shots];
@@ -205,8 +205,8 @@ export const MobileCameraView: React.FC<MobileCameraViewProps> = ({ roomId }) =>
                 autoPlay
                 playsInline
                 muted
-                className={`w-full h-full object-cover ${
-                  facingMode === 'user' ? 'scale-x-[-1]' : ''
+                className={`w-full h-full object-cover transition-transform duration-300 ${
+                  facingMode === 'user' ? 'scale-x-[-1]' : 'scale-x-100'
                 }`}
               />
 
@@ -238,15 +238,18 @@ export const MobileCameraView: React.FC<MobileCameraViewProps> = ({ roomId }) =>
                 <div className="absolute inset-0 bg-white z-30 transition-opacity duration-150" />
               )}
 
-              {/* Switch camera button */}
+              {/* Switch camera button with indicator */}
               {isActive && (
                 <button
                   type="button"
                   onClick={switchCamera}
-                  className="absolute top-4 right-4 z-10 w-10 h-10 rounded-full bg-slate-900/80 text-white flex items-center justify-center backdrop-blur-md shadow-md border border-white/20 active:rotate-180 transition-transform cursor-pointer"
-                  title="สลับกล้องหน้า/หลัง"
+                  className="absolute top-3 right-3 z-10 px-3 py-1.5 rounded-full bg-slate-900/85 text-white flex items-center gap-1.5 backdrop-blur-md shadow-lg border border-white/25 active:scale-90 transition-all cursor-pointer hover:bg-slate-800"
+                  title="แตะเพื่อสลับกล้องหน้า/หลัง"
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="w-3.5 h-3.5 text-pink-400" />
+                  <span className="text-[11px] font-bold">
+                    {facingMode === 'user' ? 'กล้องหน้า' : 'กล้องหลัง'}
+                  </span>
                 </button>
               )}
 

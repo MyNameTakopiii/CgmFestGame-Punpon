@@ -187,72 +187,125 @@ export const PolaroidModal: React.FC<PolaroidModalProps> = ({
             ) : (
               /* Mobile Remote Camera Pairing View */
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-center animate-fade-in">
-                <div className="flex flex-col md:flex-row gap-5 items-center justify-center">
-                  {/* Pairing QR Code Card */}
-                  <div className="flex-1">
-                    <QRCodeDisplay
-                      url={remoteCamera.pairingUrl}
-                      title="สแกนเพื่อใช้มือถือเป็นกล้อง"
-                      subtitle="เปิดกล้องมือถือส่องเพื่อเชื่อมต่อทันที"
-                      size={150}
-                    />
+                {!remoteCamera.isConnected ? (
+                  /* Screen 1: Waiting for Mobile to Scan QR */
+                  <div className="flex flex-col md:flex-row gap-5 items-center justify-center py-2">
+                    <div className="flex-1">
+                      <QRCodeDisplay
+                        url={remoteCamera.pairingUrl}
+                        title="สแกนเพื่อใช้มือถือเป็นกล้อง"
+                        subtitle="เปิดกล้องมือถือส่องเพื่อเชื่อมต่อทันที"
+                        size={160}
+                      />
+                    </div>
+                    <div className="flex-1 flex flex-col items-center justify-center space-y-3 w-full max-w-xs">
+                      <div className="p-4 bg-white rounded-2xl border border-slate-200 w-full text-center shadow-xs">
+                        <div className="flex items-center justify-center gap-2 mb-1.5">
+                          <span className="w-3 h-3 rounded-full bg-amber-400 animate-ping" />
+                          <span className="text-sm font-black text-slate-800 font-heading">
+                            กำลังรอมือถือเชื่อมต่อ...
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          เปิดกล้องบนมือถือแล้วส่องที่ QR Code เพื่อเปิดหน้ารีโมตกล้องไร้สาย
+                        </p>
+                      </div>
+                      <div className="w-full text-left text-[11px] text-slate-500 space-y-1 bg-white/70 p-3 rounded-xl border border-slate-200">
+                        <p className="font-bold text-slate-700">💡 ฟังก์ชันรองรับ:</p>
+                        <p>• สลับกล้องหน้า/หลังได้อิสระบนมือถือ</p>
+                        <p>• รูปจะเด้งขึ้นพรีวิวบนจอใหญ่นี้ทันทีแบบ Real-Time</p>
+                        <p>• เมื่อครบ 3 ช็อตจะเปลี่ยนเข้าหน้าสรุปผลทันที</p>
+                      </div>
+                    </div>
                   </div>
-
-                  {/* Status & Live Slot Previews */}
-                  <div className="flex-1 flex flex-col items-center justify-center space-y-3 w-full max-w-xs">
-                    <div className="p-3 bg-white rounded-xl border border-slate-200 w-full text-center">
-                      <div className="flex items-center justify-center gap-2 mb-1">
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full ${
-                            remoteCamera.isConnected
-                              ? 'bg-emerald-500 animate-pulse'
-                              : 'bg-amber-400 animate-ping'
-                          }`}
-                        />
-                        <span className="text-xs font-black text-slate-800 font-heading">
-                          {remoteCamera.isConnected
-                            ? 'เชื่อมต่อมือถือสำเร็จแล้ว!'
-                            : 'กำลังรอมือถือสแกนเชื่อมต่อ...'}
+                ) : (
+                  /* Screen 2: Mobile Connected - Large Live Shot Preview & Slot Trackers */
+                  <div className="space-y-4 py-1 animate-fade-in">
+                    {/* Header connection bar */}
+                    <div className="flex items-center justify-between px-3.5 py-2 bg-emerald-50 border border-emerald-200 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-bold text-emerald-800">
+                          มือถือเชื่อมต่อสำเร็จแล้ว!
                         </span>
                       </div>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">
-                        {remoteCamera.isConnected
-                          ? 'กรุณากดถ่ายที่หน้าจอมือถือ ภาพจะเด้งขึ้นที่นี่ทันที'
-                          : 'เมื่อสแกนแล้ว หน้ารีโมตกล้องจะเปิดขึ้นบนมือถือ'}
-                      </p>
+                      <span className="text-[11px] font-mono font-bold text-emerald-700">
+                        ช็อตที่ได้รับ: {remoteCamera.receivedShots.filter(Boolean).length}/3
+                      </span>
                     </div>
 
-                    {/* Live 3 Slots Received Monitor */}
-                    <div className="w-full">
-                      <span className="text-[10px] font-bold text-slate-500 block mb-1.5 uppercase font-mono">
-                        สถานะ 3 ช็อตที่ได้รับ:
-                      </span>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[0, 1, 2].map((slotIdx) => {
-                          const shot = remoteCamera.receivedShots[slotIdx];
-                          return (
-                            <div
-                              key={slotIdx}
-                              className="aspect-4/3 bg-slate-200 rounded-lg overflow-hidden border border-slate-300 relative flex items-center justify-center"
-                            >
-                              {shot ? (
+                    {/* Central Display: Prominent Shot Preview or Waiting Viewfinder */}
+                    <div className="relative w-full aspect-16/10 sm:aspect-16/9 bg-slate-900 rounded-2xl overflow-hidden shadow-inner border-2 border-emerald-500/40 flex items-center justify-center">
+                      {remoteCamera.latestReceivedIndex !== null &&
+                      remoteCamera.receivedShots[remoteCamera.latestReceivedIndex] ? (
+                        /* Large Preview of the Latest Shot */
+                        <div className="relative w-full h-full animate-fade-in">
+                          <img
+                            src={remoteCamera.receivedShots[remoteCamera.latestReceivedIndex]}
+                            alt={`Preview ช็อต ${remoteCamera.latestReceivedIndex + 1}`}
+                            className="w-full h-full object-contain bg-black/80"
+                          />
+                          {/* Overlay Tag */}
+                          <div className="absolute top-3 left-3 bg-emerald-500/90 text-white backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-md">
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <span>ได้รับช็อตที่ {remoteCamera.latestReceivedIndex + 1} แล้ว!</span>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Waiting for first snap */
+                        <div className="flex flex-col items-center justify-center text-center p-6 text-slate-300">
+                          <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center mb-3 animate-pulse">
+                            <Smartphone className="w-7 h-7 text-pink-400" />
+                          </div>
+                          <p className="text-sm font-bold text-white font-heading">
+                            พร้อมถ่ายภาพแล้ว!
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1 max-w-xs">
+                            กดปุ่มถ่ายที่หน้าจอมือถือ ภาพจะเด้งขึ้นแสดงที่จอคอมพิวเตอร์นี้ทันที
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3-Slot Filmstrip Progress Indicators */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {[0, 1, 2].map((slotIdx) => {
+                        const shot = remoteCamera.receivedShots[slotIdx];
+                        const isLatest = remoteCamera.latestReceivedIndex === slotIdx;
+                        return (
+                          <div
+                            key={slotIdx}
+                            className={`relative aspect-4/3 rounded-xl overflow-hidden border-2 bg-slate-100 transition-all ${
+                              shot
+                                ? isLatest
+                                  ? 'border-emerald-500 ring-2 ring-emerald-400/50 shadow-md scale-102'
+                                  : 'border-slate-300'
+                                : 'border-dashed border-slate-300'
+                            } flex items-center justify-center`}
+                          >
+                            {shot ? (
+                              <>
                                 <img
                                   src={shot}
                                   alt={`ช็อต ${slotIdx + 1}`}
                                   className="w-full h-full object-cover"
                                 />
-                              ) : (
-                                <span className="text-[10px] text-slate-400 font-mono">
-                                  0{slotIdx + 1}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                                <div className="absolute bottom-1 right-1 bg-emerald-600 text-white rounded-full p-0.5 shadow-xs">
+                                  <span className="text-[9px] font-bold px-1">0{slotIdx + 1}</span>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center gap-1 text-slate-400">
+                                <span className="text-xs font-mono font-bold">0{slotIdx + 1}</span>
+                                <span className="text-[9px]">รอช็อตนี้...</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             )}
 

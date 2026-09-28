@@ -40,6 +40,7 @@ See [`SCOPE.md`](./SCOPE.md) for the full game design, UI/UX design system, and 
 
 ## ✨ Features
 
+### 🎮 CGM48 Lyric Guess Game
 - 🎧 **TTS lyric snippets** with a strict, timer-enforced hard cutoff (no fading, no partial reveal past the limit)
 - 🎯 **4-choice quiz engine** with unique, balanced distractors
 - 🔥 **Streak & combo system** with visual fire badges
@@ -50,6 +51,14 @@ See [`SCOPE.md`](./SCOPE.md) for the full game design, UI/UX design system, and 
 - 🌿 **CGM48-branded design system** (forest mint / cream / gold palette)
 - 💸 **Zero infrastructure cost** — 100% static, 100% client-side
 
+### 📸 After Party Photobooth (3-Cut Pro)
+- 🎞️ **3-Cut Sticker Strips**: Classic photo strips with authentic CGM48 frames (Punpon Mint Green, General Election 35mm, After School Class)
+- 📱 **Mobile Companion Camera**: Scan a QR code to use your smartphone as a wireless HD remote camera over 4G/5G/Wi-Fi
+- 🔄 **Front/Back Camera Toggle**: Seamless switching between selfie and rear cameras with proper mirror handling
+- ⚡ **Real-Time PC Live Preview**: Watch photos pop up instantaneously on the big screen as they are snapped on mobile
+- 🪄 **Dynamic Header Typography**: Customize top header text in 32px bold lettering
+- ☁️ **QR Code Cross-Device Download**: Direct Cloudinary CDN upload or local in-memory fallback for instant smartphone photo saving
+
 ---
 
 ## 🧱 Tech Stack
@@ -57,17 +66,21 @@ See [`SCOPE.md`](./SCOPE.md) for the full game design, UI/UX design system, and 
 | Layer                     | Technology                                                                                                                  |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Framework                 | [React](https://react.dev/) + [Vite](https://vitejs.dev/) + TypeScript                                                      |
-| Styling                   | [Tailwind CSS](https://tailwindcss.com/)                                                                                    |
+| Styling                   | [Tailwind CSS v4](https://tailwindcss.com/)                                                                                 |
 | Package Manager & Runtime | [Bun](https://bun.sh/) (v1.1+)                                                                                              |
+| P2P Remote Camera         | WebRTC DataChannel via [PeerJS](https://peerjs.com/) + BroadcastChannel API                                                 |
+| Media Capture             | Browser-native [MediaDevices API](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia) (`getUserMedia`) |
+| Image Generation          | Client-side HTML5 Canvas Compositor (Bespoke 3-cut strip renderer)                                                          |
+| Cloud Storage (Optional)  | [Cloudinary](https://cloudinary.com/) (Direct Unsigned REST Upload) + In-Memory Fallback Store                               |
 | Testing (Unit)            | [Bun Test](https://bun.sh/docs/cli/test)                                                                                    |
 | Testing (E2E)             | [Playwright](https://playwright.dev/)                                                                                       |
 | Animation                 | [Framer Motion](https://www.framer.com/motion/)                                                                             |
-| Icons / UI primitives     | [Lucide React](https://lucide.dev/) + shadcn/ui-style components                                                            |
+| Icons / UI primitives     | [Lucide React](https://lucide.dev/) + glassmorphic components                                                               |
 | Text-to-Speech            | Browser-native [Web Speech API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Speech_API) (`window.speechSynthesis`) |
 | State management          | [Zustand](https://zustand-demo.pmnd.rs/)                                                                                    |
 | Celebration effects       | [canvas-confetti](https://www.npmjs.com/package/canvas-confetti)                                                            |
 | Data source               | Static local JSON (`src/data/songs.json`)                                                                                   |
-| Hosting                   | Vercel or Cloudflare Pages (free tier)                                                                                      |
+| Hosting                   | Cloudflare Pages or Vercel (free tier)                                                                                      |
 
 ---
 
@@ -130,30 +143,61 @@ bun run preview   # preview the production build locally
 
 ```
 cgm48-lyric-guess/
-├── public/
+├── public/                           # Static assets, official frames & mascot art
 ├── src/
-│   ├── components/
-│   │   ├── ListenButton.tsx      # Central play button + pulse animation
-│   │   ├── TimerRing.tsx          # Circular countdown synced to TTS cutoff
-│   │   ├── AnswerGrid.tsx          # 2x2 multiple-choice quiz buttons
-│   │   ├── HUD.tsx                  # Round indicator, score, streak badge
-│   │   └── ResultCard.tsx            # End-game rank + share card
-│   ├── engine/
-│   │   ├── lyricSampler.ts             # Snippet selection + keyword blocker
-│   │   ├── ttsEngine.ts                 # speak() / hardStop() wrapper
-│   │   ├── distractors.ts                # Answer choice generation
-│   │   └── scoring.ts                     # Streak/multiplier/rank logic
-│   ├── store/
-│   │   └── gameStore.ts                    # Zustand store (round/score/mode/timer)
+│   ├── app/                          # App bootstrap & global layout
+│   │   ├── App.tsx                   # Main layout + mobile companion routing
+│   │   └── main.tsx                  # React DOM entry point
+│   ├── features/
+│   │   ├── quiz/                     # Lyric Guess core game feature
+│   │   │   ├── components/           # HUD, AnswerGrid, ListenButton, ResultCard, TimerRing
+│   │   │   ├── hooks/                # useGameSession, useAudioPlayer, useKeyboardControls
+│   │   │   ├── services/             # distractorService, lyricService, scoringService, ttsService
+│   │   │   └── store/                # gameStore (Zustand)
+│   │   ├── photobooth/               # 3-Cut Pro After Party Photobooth feature
+│   │   │   ├── components/
+│   │   │   │   ├── CameraViewfinder.tsx   # Direct webcam viewfinder
+│   │   │   │   ├── MobileCameraView.tsx   # Wireless companion camera UI for mobile
+│   │   │   │   ├── MobileDownloadView.tsx # Mobile photo strip download view
+│   │   │   │   ├── OnScreenPolaroid.tsx   # Floating keepsake widget & launcher
+│   │   │   │   ├── PhotoStripCard.tsx     # Result strip with QR code & themes
+│   │   │   │   ├── PolaroidModal.tsx      # Main photobooth host modal
+│   │   │   │   ├── QRCodeDisplay.tsx      # SVG QR code generator
+│   │   │   │   ├── SequenceViewfinder.tsx # 3-shot automated sequence engine
+│   │   │   │   └── TemplateSelector.tsx   # 3-Cut theme switcher
+│   │   │   ├── hooks/
+│   │   │   │   ├── useRemoteCamera.ts     # P2P WebRTC / BroadcastChannel remote sync
+│   │   │   │   └── useWebcam.ts           # MediaDevices webcam & front/rear switcher
+│   │   │   ├── services/
+│   │   │   │   └── uploadService.ts       # Cloudinary REST upload & in-memory fallback
+│   │   │   └── utils/
+│   │   │       └── photoStripGenerator.ts # Bespoke 3-cut canvas compositor
+│   │   └── decorations/              # Background stars, Boiled Egg mascot
+│   ├── shared/                       # Design system primitives (Button, Card, Modal, Badge)
 │   ├── data/
-│   │   └── songs.json                        # CGM48 song + lyric database
-│   ├── App.tsx
-│   └── main.tsx
-├── SCOPE.md
-├── README.md
-├── package.json
-└── vite.config.ts
+│   │   └── songs.json                # CGM48 song catalog
+│   └── index.css                     # Tailwind CSS v4 design tokens
+├── SCOPE.md                          # Full game design & photobooth specifications
+├── REFACTOR.md                       # Clean Architecture migration guide
+└── README.md
 ```
+
+---
+
+## ⚙️ Environment Configuration
+
+Copy `.env.example` to `.env` to configure optional third-party integrations:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Required | Description |
+| :--- | :--- | :--- |
+| `VITE_CLOUDINARY_CLOUD_NAME` | No | Cloudinary Cloud Name for hosting photo strips for mobile QR download |
+| `VITE_CLOUDINARY_UPLOAD_PRESET` | No | Unsigned upload preset name configured in Cloudinary |
+
+*(Note: If left unconfigured, the photobooth will automatically use local in-memory fallback URLs without crashing).*
 
 ---
 
@@ -174,63 +218,51 @@ All game content lives in `src/data/songs.json`. Each entry follows this schema:
 }
 ```
 
-| Field   | Type                                  | Description                                                        |
-| ------- | ------------------------------------- | ------------------------------------------------------------------ |
-| `id`    | `string`                              | Unique, stable slug (e.g. `cgm_01`)                                |
-| `title` | `string`                              | Official song title in Thai                                        |
-| `type`  | `"single" \| "coupling" \| "theater"` | Used to balance distractor selection                               |
-| `lines` | `string[]`                            | Ordered lyric lines the sampler can draw consecutive snippets from |
-
-**Guidelines when adding entries:**
-
-- Include at least 3–4 `lines` per song so the sampler has enough material to build snippets that reliably exceed the 3s/5s cutoff.
-- Avoid lines that contain the song title verbatim as your _only_ available lines — the keyword blocker will filter them out, and a song with no valid lines left will be skipped by the sampler.
-- Keep `id`s stable once shipped; other systems (and future save data) may reference them.
-
 ---
 
 ## 🏗️ Architecture
 
-### Game Loop
+### 1. Game Loop
 
 ```
 Select Mode (Easy/Hard/Endless)
         │
         ▼
- lyricSampler.ts ──► pick song + valid snippet (keyword-blocked)
+ lyricService.ts ──► pick song + valid snippet (keyword-blocked)
         │
         ▼
-  ttsEngine.ts ──► speak snippet, hard-stop via setTimeout + speechSynthesis.cancel()
+   ttsService.ts ──► speak snippet, hard-stop via setTimeout + speechSynthesis.cancel()
         │
         ▼
- distractors.ts ──► generate 4 shuffled answer choices
+distractorService.ts ──► generate 4 balanced shuffled answer choices
         │
         ▼
-   AnswerGrid.tsx ──► player selects → instant feedback → scoring.ts updates score/streak
+  AnswerGrid.tsx ──► player selects → instant feedback → scoringService.ts updates score
         │
         ▼
-   Repeat for 10 rounds ──► ResultCard.tsx (rank, share card)
+  Repeat for 10 rounds ──► ResultCard.tsx (rank, share card)
 ```
 
-### State Management
+### 2. After Party Photobooth & Mobile Remote Camera
 
-`gameStore.ts` (Zustand) is the single source of truth for:
-
-- Current round number and total rounds
-- Score, streak, and combo multiplier
-- Current mode (Easy / Hard / Endless)
-- TTS playback state (idle / speaking / cut-off) and replay-used flag
-- Session song pool (songs already used, to avoid repeats within a session)
-
-### Audio / TTS Engine
-
-`ttsEngine.ts` wraps `window.speechSynthesis`:
-
-1. Builds a `SpeechSynthesisUtterance` for the sampled snippet, with `lang = "th-TH"`.
-2. Calls `speechSynthesis.speak(utterance)`.
-3. Starts a `setTimeout` for exactly 3,000ms (Hard) or 5,000ms (Easy).
-4. On timeout, force-calls `speechSynthesis.cancel()` — a true hard stop regardless of how much of the utterance has played.
-5. Emits playback state changes so `ListenButton.tsx` and `TimerRing.tsx` can animate in sync.
+```
+  [Mobile Smartphone Camera]
+              │
+  (Snap 1..3 with Front/Rear switch)
+              │
+  (960px WebRTC Payload Compression)
+              ▼
+   WebRTC DataChannel (PeerJS) ──► Instant Real-Time Preview on PC Screen
+              │
+  (Lightweight COMPLETE Signal)
+              ▼
+  [PC Host: PhotoStripCard]
+              │
+  (3-Cut Bespoke Canvas Compositor)
+              │
+              ├──► Direct Save as PNG
+              └──► Optional Cloudinary Direct Upload ──► QR Code for Mobile Download
+```
 
 ---
 
