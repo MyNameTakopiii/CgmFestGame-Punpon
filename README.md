@@ -55,7 +55,8 @@ See [`SCOPE.md`](./SCOPE.md) for the full game design, UI/UX design system, and 
 - 🎞️ **3-Cut Sticker Strips**: Classic photo strips with authentic CGM48 frames (Punpon Mint Green, General Election 35mm, After School Class)
 - 📱 **Mobile Companion Camera**: Scan a QR code to use your smartphone as a wireless HD remote camera over 4G/5G/Wi-Fi
 - 🔄 **Front/Back Camera Toggle**: Seamless switching between selfie and rear cameras with proper mirror handling
-- ⚡ **Real-Time PC Live Preview**: Watch photos pop up instantaneously on the big screen as they are snapped on mobile
+- 📸 **Mobile-First 3-Shot Capture**: Take all 3 shots on mobile first without network dropouts, inspect in a review screen, and tap to send to PC in batch
+- ⚡ **Dual-Channel Cloud & WebRTC Sync**: Guaranteed delivery combining WebRTC P2P DataChannel with parallel Cloudinary sync to bypass carrier NAT limitations
 - 🪄 **Dynamic Header Typography**: Customize top header text in 32px bold lettering
 - ☁️ **QR Code Cross-Device Download**: Direct Cloudinary CDN upload or local in-memory fallback for instant smartphone photo saving
 
@@ -248,20 +249,18 @@ distractorService.ts ──► generate 4 balanced shuffled answer choices
 ```
   [Mobile Smartphone Camera]
               │
-  (Snap 1..3 with Front/Rear switch)
+  (Local 3-Shot Sequence + Front/Rear Switch)
               │
-  (960px WebRTC Payload Compression)
-              ▼
-   WebRTC DataChannel (PeerJS) ──► Instant Real-Time Preview on PC Screen
+  (In-Phone Review & Confirmation)
               │
-  (Lightweight COMPLETE Signal)
+  (Dual-Sync: WebRTC DataChannel + Parallel Cloudinary Sync)
               ▼
   [PC Host: PhotoStripCard]
               │
   (3-Cut Bespoke Canvas Compositor)
               │
               ├──► Direct Save as PNG
-              └──► Optional Cloudinary Direct Upload ──► QR Code for Mobile Download
+              └──► Cloudinary CDN Upload ──► QR Code for Mobile Download
 ```
 
 ---
@@ -279,23 +278,27 @@ distractorService.ts ──► generate 4 balanced shuffled answer choices
 
 The app is a static Vite build with zero backend dependencies, so it deploys to any static host's free tier.
 
+### Cloudflare Pages (Recommended)
+
+1. Push the repository to GitHub.
+2. In the **Cloudflare Pages** dashboard, select **Create Application** > **Pages** > **Connect to Git**.
+3. Configure build settings:
+   - **Framework preset:** Vite / None
+   - **Build command:** `bun run build` (or `npm run build`)
+   - **Build output directory:** `dist`
+4. **Environment Variables (For QR Code Mobile Downloads):**
+   Go to **Settings** > **Environment Variables** (Production) and add:
+   - `VITE_CLOUDINARY_CLOUD_NAME`: your Cloudinary cloud name (e.g. `dx7p5ij0z`)
+   - `VITE_CLOUDINARY_UPLOAD_PRESET`: unsigned upload preset (e.g. `photobooth_preset`)
+   *(Note: If omitted, the app will continue to run using the built-in local in-memory fallback store).*
+
 ### Vercel
 
 ```bash
 npm install -g vercel
 vercel
 ```
-
 Or connect the GitHub repo directly in the Vercel dashboard for automatic deploys on push.
-
-### Cloudflare Pages
-
-1. Push the repo to GitHub.
-2. In the Cloudflare Pages dashboard, create a new project from the repo.
-3. Build command: `npm run build`
-4. Output directory: `dist`
-
-No environment variables or secrets are required — there are no external API keys in this project.
 
 ---
 

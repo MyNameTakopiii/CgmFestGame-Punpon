@@ -279,19 +279,24 @@ Users can capture their 3 shots through two distinct modes:
                   │   PolaroidModal / SequenceViewfinder / Strip  │
                   └───────────────▲──────────────▲───────────────┘
                                   │              │
-                   (WebRTC PeerJS)│              │(Direct getUserMedia)
-                                  │              │
+                   (WebRTC + Cloud│              │(Direct getUserMedia)
+                     Dual Sync)   │              │
                   ┌───────────────┴──┐       ┌───┴──────────────┐
                   │ Mobile Companion │       │    PC Webcam     │
-                  │  (4G/5G or WiFi) │       │  (Built-in / USB)│
-                  └──────────────────┘       └──────────────────┘
+                  │ (Local 3-Shot +  │       │  (Built-in / USB)│
+                  │   Batch Send)    │       └──────────────────┘
+                  └──────────────────┘
 ```
 
 1. **Computer Webcam Mode (`SequenceViewfinder`):** Direct in-browser camera feed with 3s countdown and 2s pose-change intervals between shots.
 2. **Mobile Companion Mode (`MobileCameraView`):**
    - Host generates a unique room ID and renders a QR code.
    - User scans the QR code with their mobile phone (works over 4G/5G cellular data or Wi-Fi without needing same-network LAN).
-   - Instant P2P communication is established via **WebRTC DataChannel (`peerjs`)** alongside a fallback **`BroadcastChannel`** for same-browser testing.
+   - **Mobile-First Capture Workflow:**
+     - User shoots all 3 pictures locally on their phone without network stalls or connection dropouts.
+     - Includes front/rear camera switching (`RotateCcw`), 3s countdowns, and 2s inter-shot pose changes.
+     - After taking 3 shots, user enters the **Review Screen** to preview all 3 photos and can choose to retake or proceed.
+     - Pressing **"🚀 ส่งภาพ 3 ช็อตไปที่คอมพิวเตอร์"** dispatches the complete 3-shot batch to the PC via a dual-channel sync engine.
 
 ### 6.4 Front & Rear Camera Switching (`switchCamera`)
 
@@ -310,18 +315,25 @@ To ensure instantaneous transmission across cellular networks and eliminate pack
 - The resulting payload size is reduced to **~35KB–45KB**, allowing immediate transmission within a single network packet.
 - Completion signaling (`COMPLETE`) is sent as a lightweight command message, allowing the Host to assemble the final strip from the accumulated slots without redundant multi-megabyte payload bursts.
 
-### 6.6 Real-Time PC Live Preview & Auto-Transition
+### 6.6 Dual-Channel Transmission & Host Auto-Transition
 
-1. **Real-Time Live Preview on Host:**
-   - As each shot is captured on mobile, the Host receives the snap within milliseconds.
-   - Host UI immediately showcases an animated, prominent **Live Preview Card** of the latest shot with a celebratory badge (`ช็อตที่ N ได้รับแล้ว! 🎉`).
-   - The 3-slot filmstrip tracker displays thumbnail previews and green checkmarks.
-2. **Auto-Transition:**
-   - Upon receiving the 3rd shot or `COMPLETE` signal, the Host automatically transitions from the viewfinder to the **Strip Assembly (`generating`)** phase.
+To guarantee 100% reliable image delivery even across symmetric carrier NATs (CGNAT on 4G/5G) where direct WebRTC P2P may be hindered:
+1. **Dual-Channel Dispatch:**
+   - When the user taps **"ส่งภาพ 3 ช็อตไปที่คอมพิวเตอร์"**, the mobile client dispatches `{ type: 'COMPLETE', shots: [...] }` over WebRTC / BroadcastChannel.
+   - Simultaneously, in the background, all 3 images are uploaded in parallel to Cloudinary under predictable keys (`punpon_${roomId}_s0..2`).
+2. **Host Dual-Listener:**
+   - Host receives the shots instantly via WebRTC if peer connection is active.
+   - If WebRTC NAT traversal fails, the Host's fallback cloud poller detects the uploaded shots from Cloudinary and triggers completion.
+3. **Auto-Transition:**
+   - Upon receiving the 3 shots, the Host automatically transitions from the viewfinder to the **Strip Assembly (`generating`)** phase.
    - Within 500ms, the composite canvas generates the final 3-cut strip and presents the **PhotoStripCard** containing download controls and mobile download QR codes.
 
 ### 6.7 Storage & Cross-Device Download System
 
-- **Cloudinary Direct Upload (Optional):** If `VITE_CLOUDINARY_CLOUD_NAME` and `VITE_CLOUDINARY_UPLOAD_PRESET` are configured in `.env`, the composite photo strip is uploaded directly from the client to Cloudinary via unsigned REST API. A short public CDN URL is encoded into a download QR code.
-- **Local In-Memory Fallback:** If Cloudinary credentials are not configured, the app seamlessly falls back to storing the data URL in local memory (`uploadService.ts`), providing an in-app download view without crashing.
+- **Cloudflare Pages Production Deployment:**
+  - Because `.env` is gitignored for security, `VITE_CLOUDINARY_CLOUD_NAME` and `VITE_CLOUDINARY_UPLOAD_PRESET` must be configured in the **Cloudflare Pages Dashboard** (Settings > Environment Variables) for production builds.
+  - When configured, composite photo strips uploaded to Cloudinary receive a permanent CDN URL, allowing visitors to scan the download QR code on their phone from any network.
+- **Local In-Memory Fallback:**
+  - If Cloudinary credentials are not configured or the network is unavailable, the application gracefully stores the image data URL in local memory (`uploadService.ts`), ensuring development, testing, and offline modes continue functioning without errors.
+
 

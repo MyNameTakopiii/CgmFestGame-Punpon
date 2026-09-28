@@ -48,7 +48,7 @@ export async function uploadPhotoStrip(
         formData.append('folder', 'punpon_afterparty');
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
           method: 'POST',
@@ -60,8 +60,9 @@ export async function uploadPhotoStrip(
         if (response.ok) {
           const data = await response.json();
           if (data.secure_url) {
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
             return {
-              url: data.secure_url,
+              url: `${origin}/?mode=download&url=${encodeURIComponent(data.secure_url)}`,
               isCloud: true,
             };
           }

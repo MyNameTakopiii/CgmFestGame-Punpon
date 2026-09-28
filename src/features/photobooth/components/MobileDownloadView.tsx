@@ -69,15 +69,15 @@ export const MobileDownloadView: React.FC<MobileDownloadViewProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-between p-4 sm:p-6 max-w-md mx-auto selection:bg-pink-500">
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col justify-between p-4 sm:p-6 max-w-md mx-auto selection:bg-pink-500 selection:text-white">
       {/* Top Header */}
       <header className="text-center pt-2 pb-4">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/30 text-xs font-black mb-2">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-pink-100 text-pink-700 border border-pink-200 text-xs font-black mb-2 shadow-2xs">
+          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
           <span>PUNPON AFTER PARTY KEEPSAKE</span>
         </div>
-        <h1 className="text-xl font-black text-white font-heading">รูปสติกเกอร์ของคุณพร้อมแล้ว!</h1>
-        <p className="text-xs text-slate-400 mt-0.5">
+        <h1 className="text-xl font-black text-slate-900 font-heading">รูปสติกเกอร์ของคุณพร้อมแล้ว!</h1>
+        <p className="text-xs text-slate-500 mt-0.5">
           แตะปุ่มด้านล่าง หรือกดค้างที่รูปภาพเพื่อบันทึก
         </p>
       </header>
@@ -87,10 +87,10 @@ export const MobileDownloadView: React.FC<MobileDownloadViewProps> = ({
         {imageUrl ? (
           <div className="relative group max-w-[270px] mx-auto animate-fade-in">
             {/* Glow behind strip */}
-            <div className="absolute -inset-2 bg-gradient-to-b from-pink-500/30 via-purple-500/20 to-amber-500/30 rounded-3xl blur-lg opacity-75" />
+            <div className="absolute -inset-2 bg-gradient-to-b from-pink-300/40 via-purple-300/30 to-amber-300/30 rounded-3xl blur-lg opacity-75" />
 
             {/* Photo Strip Frame */}
-            <div className="relative bg-white p-2 rounded-2xl shadow-2xl border border-slate-200">
+            <div className="relative bg-white p-2.5 rounded-2xl shadow-xl border border-slate-200">
               <img
                 src={imageUrl}
                 alt="Punpon After Party 3-Cut Photo Strip"
@@ -99,20 +99,23 @@ export const MobileDownloadView: React.FC<MobileDownloadViewProps> = ({
             </div>
 
             {/* Hint overlay */}
-            <p className="text-[10px] text-slate-400 text-center mt-3">
+            <p className="text-[10px] text-slate-500 text-center mt-3 font-medium">
               💡 แตะค้างที่รูปภาพเพื่อเลือก &ldquo;บันทึกรูปภาพ (Save Image)&rdquo; ได้เลย
             </p>
           </div>
         ) : (
-          <div className="p-8 bg-slate-900 rounded-3xl text-center border border-slate-800">
+          <div className="p-8 bg-white rounded-3xl text-center border border-slate-200 shadow-md">
             <Heart className="w-8 h-8 text-pink-500 mx-auto mb-2 animate-pulse" />
-            <p className="text-xs text-slate-300">กำลังเตรียมรูปภาพของคุณ...</p>
+            <p className="text-xs font-bold text-slate-700">กำลังเตรียมรูปภาพของคุณ...</p>
+            <p className="text-[10px] text-slate-400 mt-1">
+              กรุณารอสักครู่ ระบบกำลังดึงภาพความละเอียดสูง
+            </p>
           </div>
         )}
       </main>
 
       {/* Bottom Action Buttons */}
-      <footer className="space-y-2.5 pt-4 border-t border-slate-900">
+      <footer className="space-y-2.5 pt-4 border-t border-slate-200">
         <button
           type="button"
           onClick={handleNativeSaveOrShare}
@@ -126,25 +129,25 @@ export const MobileDownloadView: React.FC<MobileDownloadViewProps> = ({
           <button
             type="button"
             onClick={handleNativeSaveOrShare}
-            className="flex-1 py-2.5 px-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+            className="flex-1 py-2.5 px-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 shadow-2xs transition-colors cursor-pointer"
           >
-            <Share2 className="w-3.5 h-3.5 text-pink-400" />
+            <Share2 className="w-3.5 h-3.5 text-pink-500" />
             <span>แชร์รูปภาพ</span>
           </button>
 
           <button
             type="button"
             onClick={handleCopyLink}
-            className="flex-1 py-2.5 px-3 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-200 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer"
+            className="flex-1 py-2.5 px-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 active:scale-95 shadow-2xs transition-colors cursor-pointer"
           >
             {copied ? (
               <>
-                <Check className="w-3.5 h-3.5 text-emerald-400 stroke-[3]" />
-                <span className="text-emerald-300">คัดลอกแล้ว!</span>
+                <Check className="w-3.5 h-3.5 text-emerald-600 stroke-[3]" />
+                <span className="text-emerald-700">คัดลอกแล้ว!</span>
               </>
             ) : (
               <>
-                <ExternalLink className="w-3.5 h-3.5 text-sky-400" />
+                <ExternalLink className="w-3.5 h-3.5 text-sky-500" />
                 <span>คัดลอกลิงก์</span>
               </>
             )}
@@ -154,7 +157,7 @@ export const MobileDownloadView: React.FC<MobileDownloadViewProps> = ({
         <div className="text-center pt-2">
           <a
             href="/"
-            className="text-[11px] text-pink-400 hover:text-pink-300 font-bold underline transition-colors"
+            className="text-[11px] text-pink-600 hover:text-pink-700 font-bold underline transition-colors"
           >
             ← กลับสู่หน้าหลักเกม PUNPON AFTER PARTY
           </a>

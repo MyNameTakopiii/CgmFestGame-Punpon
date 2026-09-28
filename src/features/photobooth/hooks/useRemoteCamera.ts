@@ -1,6 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Peer, { type DataConnection } from 'peerjs';
 
+const PEER_CONFIG = {
+  config: {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+    ],
+  },
+};
+
 export interface RemoteMessage {
   type: 'CONNECT' | 'READY' | 'SNAP' | 'COMPLETE';
   slot?: number;
@@ -33,6 +44,7 @@ export function useRemoteCameraHost(
   const peerRef = useRef<Peer | null>(null);
   const connRef = useRef<DataConnection | null>(null);
   const channelRef = useRef<BroadcastChannel | null>(null);
+  const completedRef = useRef(false);
 
   // Keep callback in ref so changes don't re-trigger peer destruction
   const onAllShotsReceivedRef = useRef(onAllShotsReceived);
@@ -43,33 +55,43 @@ export function useRemoteCameraHost(
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const pairingUrl = `${origin}/?mode=camera&room=${roomId}`;
 
-  const handleIncomingMessage = useCallback((msg: RemoteMessage) => {
-    if (msg.type === 'CONNECT' || msg.type === 'READY') {
-      setIsConnected(true);
-    } else if (msg.type === 'SNAP' && msg.image !== undefined && msg.slot !== undefined) {
-      setIsConnected(true);
-      setLatestReceivedIndex(msg.slot);
-      setReceivedShots((prev) => {
-        const next = [...prev];
-        next[msg.slot!] = msg.image!;
-        // If all 3 slots are filled, trigger completion automatically
-        if (next[0] && next[1] && next[2]) {
-          setTimeout(() => {
-            onAllShotsReceivedRef.current?.([next[0], next[1], next[2]]);
-          }, 350);
-        }
-        return next;
-      });
-    } else if (msg.type === 'COMPLETE') {
-      setReceivedShots((prev) => {
-        const finalShots = msg.shots && msg.shots.length >= 3 ? msg.shots : prev;
-        if (finalShots[0] && finalShots[1] && finalShots[2]) {
-          onAllShotsReceivedRef.current?.([finalShots[0], finalShots[1], finalShots[2]]);
-        }
-        return finalShots;
-      });
-    }
+  const triggerComplete = useCallback((shots: string[]) => {
+    if (completedRef.current) return;
+    completedRef.current = true;
+    setReceivedShots(shots);
+    onAllShotsReceivedRef.current?.(shots);
   }, []);
+
+  const handleIncomingMessage = useCallback(
+    (msg: RemoteMessage) => {
+      if (msg.type === 'CONNECT' || msg.type === 'READY') {
+        setIsConnected(true);
+      } else if (msg.type === 'SNAP' && msg.image !== undefined && msg.slot !== undefined) {
+        setIsConnected(true);
+        setLatestReceivedIndex(msg.slot);
+        setReceivedShots((prev) => {
+          const next = [...prev];
+          next[msg.slot!] = msg.image!;
+          if (next[0] && next[1] && next[2]) {
+            setTimeout(() => triggerComplete([next[0], next[1], next[2]]), 300);
+          }
+          return next;
+        });
+      } else if (msg.type === 'COMPLETE') {
+        if (msg.shots && msg.shots.length >= 3) {
+          triggerComplete(msg.shots);
+        } else {
+          setReceivedShots((prev) => {
+            if (prev[0] && prev[1] && prev[2]) {
+              triggerComplete([prev[0], prev[1], prev[2]]);
+            }
+            return prev;
+          });
+        }
+      }
+    },
+    [triggerComplete]
+  );
 
   useEffect(() => {
     // 1. BroadcastChannel for local/multi-tab instantaneous sync
@@ -85,9 +107,9 @@ export function useRemoteCameraHost(
       }
     }
 
-    // 2. PeerJS for remote network WebRTC communication
+    // 2. PeerJS with STUN servers
     try {
-      const peer = new Peer(`punpon-host-${roomId}`);
+      const peer = new Peer(`punpon-host-${roomId}`, PEER_CONFIG);
       peerRef.current = peer;
 
       peer.on('open', () => {
@@ -119,13 +141,37 @@ export function useRemoteCameraHost(
       console.warn('PeerJS init failed:', err);
     }
 
+    // 3. Cloudinary Cloud Sync Poller Fallback (Guaranteed delivery if WebRTC P2P NAT fails)
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dx7p5ij0z';
+    const pollInterval = setInterval(() => {
+      if (completedRef.current) {
+        clearInterval(pollInterval);
+        return;
+      }
+      // Check if slot 2 has been uploaded to Cloudinary
+      const slot2Url = `https://res.cloudinary.com/${cloudName}/image/upload/punpon_${roomId}_s2.jpg`;
+      const img = new Image();
+      img.onload = () => {
+        if (!completedRef.current) {
+          const s0 = `https://res.cloudinary.com/${cloudName}/image/upload/punpon_${roomId}_s0.jpg`;
+          const s1 = `https://res.cloudinary.com/${cloudName}/image/upload/punpon_${roomId}_s1.jpg`;
+          const s2 = slot2Url;
+          triggerComplete([s0, s1, s2]);
+          clearInterval(pollInterval);
+        }
+      };
+      img.src = `${slot2Url}?t=${Date.now()}`;
+    }, 2500);
+
     return () => {
+      clearInterval(pollInterval);
       channelRef.current?.close();
       peerRef.current?.destroy();
     };
-  }, [roomId, handleIncomingMessage]);
+  }, [roomId, handleIncomingMessage, triggerComplete]);
 
   const resetConnection = useCallback(() => {
+    completedRef.current = false;
     setReceivedShots([]);
     setLatestReceivedIndex(null);
     setIsConnected(false);
@@ -147,6 +193,7 @@ export interface UseRemoteCameraClientReturn {
   isConnected: boolean;
   sendSnap: (slot: number, imageDataUrl: string) => void;
   sendComplete: (allShots?: string[]) => void;
+  sendBatchShots: (allShots: string[]) => Promise<boolean>;
 }
 
 /**
@@ -173,9 +220,9 @@ export function useRemoteCameraClient(roomId: string): UseRemoteCameraClientRetu
       }
     }
 
-    // 2. PeerJS
+    // 2. PeerJS with STUN configuration
     try {
-      const clientPeer = new Peer();
+      const clientPeer = new Peer(PEER_CONFIG);
       peerRef.current = clientPeer;
 
       clientPeer.on('open', () => {
@@ -233,9 +280,43 @@ export function useRemoteCameraClient(roomId: string): UseRemoteCameraClientRetu
     }
   }, []);
 
+  const sendBatchShots = useCallback(
+    async (allShots: string[]): Promise<boolean> => {
+      // 1. Instantly dispatch over WebRTC and BroadcastChannel
+      sendComplete(allShots);
+
+      // 2. Parallel upload to Cloudinary for guaranteed delivery across NAT / 4G
+      try {
+        const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dx7p5ij0z';
+        const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'photobooth_preset';
+
+        const uploads = allShots.map(async (shot, idx) => {
+          const formData = new FormData();
+          formData.append('file', shot);
+          formData.append('upload_preset', uploadPreset);
+          formData.append('public_id', `punpon_${roomId}_s${idx}`);
+
+          const res = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+            method: 'POST',
+            body: formData,
+          });
+          return res.ok;
+        });
+
+        await Promise.all(uploads);
+        return true;
+      } catch (err) {
+        console.warn('sendBatchShots Cloudinary sync notice:', err);
+        return false;
+      }
+    },
+    [roomId, sendComplete]
+  );
+
   return {
     isConnected,
     sendSnap,
     sendComplete,
+    sendBatchShots,
   };
 }
